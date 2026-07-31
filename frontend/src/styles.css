@@ -1,0 +1,119 @@
+:root {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1a1a;
+  background: #f5f6f8;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #dcdfe4;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+h1 {
+  font-size: 22px;
+}
+
+h2 {
+  font-size: 17px;
+  margin-top: 0;
+}
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+input,
+select {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #b7bcc4;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+button {
+  font: inherit;
+  padding: 8px 14px;
+  border: 1px solid #b7bcc4;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button.primary {
+  background: #1f5eff;
+  border-color: #1f5eff;
+  color: #fff;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.nav-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.balance {
+  font-size: 30px;
+  font-weight: 600;
+  margin: 4px 0;
+}
+
+.muted {
+  color: #666;
+  font-size: 13px;
+}
+
+/* Errors always show the server's specific reason + message. */
+.error {
+  border: 1px solid #d33;
+  background: #fdf0f0;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.error-reason {
+  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #a11;
+}
+
+.error-message {
+  margin-top: 2px;
+  font-size: 14px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid #e6e8eb;
+  padding: 6px 4px;
+}

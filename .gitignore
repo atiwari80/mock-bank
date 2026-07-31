@@ -1,0 +1,18 @@
+# Java
+target/
+*.class
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+
+# Personal editor state, except the shared settings that keep the Java
+# extension from building into the tree (Docker is the only build).
+.vscode/*
+!.vscode/settings.json

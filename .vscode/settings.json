@@ -1,0 +1,17 @@
+{
+  // Docker is the only build. Stop the Java extension compiling into
+  // middleware/target and reporting errors that the real build never sees.
+  "java.autobuild.enabled": false,
+  "java.configuration.updateBuildConfiguration": "disabled",
+
+  // Hide anything a tool might still drop in the tree.
+  "files.exclude": {
+    "**/target": true,
+    "**/node_modules": true,
+    "**/dist": true
+  },
+  "files.watcherExclude": {
+    "**/target/**": true,
+    "**/node_modules/**": true
+  }
+}

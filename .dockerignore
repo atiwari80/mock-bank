@@ -1,0 +1,9 @@
+# Keeps the build context small and makes sure no locally-produced artifact can
+# ever leak into an image — every build compiles from source inside Docker.
+.git
+**/target
+**/node_modules
+**/dist
+.dist
+.idea
+.vscode

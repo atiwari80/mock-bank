@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mockbank-postgres
+    environment:
+      POSTGRES_DB: mockbank
+      POSTGRES_USER: mockbank
+      POSTGRES_PASSWORD: mockbank
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mockbank -d mockbank"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No named volume on purpose: the DB is disposable. `docker-compose down`
+    # then `up` gives you a clean, freshly-migrated, freshly-seeded database.
+
+  middleware:
+    build:
+      # Root context so the image can bake /db/migrations onto the classpath.
+      context: .
+      dockerfile: middleware/Dockerfile
+    container_name: mockbank-middleware
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://postgres:5432/mockbank
+      DB_USER: mockbank
+      DB_PASSWORD: mockbank
+      FRAUD_SERVICE_URL: http://fraud-service:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  fraud-service:
+    build:
+      context: ./fraud-service
+    container_name: mockbank-fraud-service
+    environment:
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: mockbank-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - middleware
+
+  # Verification, in the network, against service names — nothing runs on the host.
+  #   docker compose --profile test run --rm smoke
+  smoke:
+    build:
+      context: ./smoke
+    container_name: mockbank-smoke
+    profiles: ["test"]
+    depends_on:
+      - middleware
+      - fraud-service
+      - frontend

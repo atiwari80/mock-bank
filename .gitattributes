@@ -1,0 +1,6 @@
+# Everything in this repo is consumed by Linux containers. Normalise to LF so a
+# Windows checkout can't hand CRLF to a shell script or a Dockerfile.
+* text=auto eol=lf
+
+# Shell scripts run inside containers — CRLF would break the shebang.
+*.sh text eol=lf
