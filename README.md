@@ -37,9 +37,14 @@ The UI talks to the middleware through `/api/*` on its own origin — nginx prox
 that to `middleware:8080`, so there is no CORS setup to worry about.
 
 **Resetting the data.** Postgres runs without a persistent volume on purpose.
-`docker-compose down && docker-compose up` gives you a brand new database:
-Flyway re-runs `V1__schema.sql` and `V2__seed.sql` on middleware boot, and you're
-back to the exact starting state.
+`docker-compose down && docker-compose up -d` gives you a brand new database:
+Flyway re-runs every migration on middleware boot and you are back to the exact
+starting state, ids and all. It takes about fifteen seconds.
+
+This matters more than it sounds. Balances move, `daily_withdrawn` accumulates,
+and payments advance through their states — so a run that isn't started from a
+clean database will not behave like the one before it. Anything driving this app
+repeatedly should reset between cycles rather than assume the seed is intact.
 
 ### Checking it works
 
@@ -211,12 +216,16 @@ recipient, whether the recipient is new, an IP risk signal, and how many recent
 transfers the account has made — and gets back a score and a decision.
 
 ```
-POST /fraud-check
-{ "accountId": 1, "amount": 500.00, "recipientId": 2,
-  "recipientIsNew": false, "ipRisk": 0, "recentTransferCount": 1 }
+GET /fraud-check?account=1&amount=500&recipient=2&ip=0
+      &recipientIsNew=false&recentTransferCount=1
 
-→ { "score": 0, "decision": "approve" }
+→ { "score": 10, "decision": "approve" }
 ```
+
+The same call is also accepted as a `POST` with a JSON body
+(`accountId`, `amount`, `recipientId`, `recipientIsNew`, `ipRisk`,
+`recentTransferCount`). Both return the identical answer. `decision` is one of
+`approve`, `review` or `decline`.
 
 How the score is arrived at is deliberately not documented and is not exposed
 through the middleware or the UI. Treat it as a black box: the same request

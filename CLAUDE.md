@@ -57,7 +57,11 @@ Feature logic stays in its own package. Do not put it in `common`, `auth`, or
 | Fraud scoring | DONE — opaque 0–1000 score, four factors |
 
 Every screen is real; there is no `PlaceholderScreen` any more. The smoke suite
-covers all five flows (62 checks).
+covers all five flows (72 checks) and every outcome the POC spec lists.
+
+**State moves.** Balances change, `daily_withdrawn` accumulates and payments
+advance, so anything that runs the app repeatedly must reset the database
+between cycles: `docker compose down && docker compose up -d`.
 
 ### Endpoint inventory
 ```
@@ -169,10 +173,11 @@ a multi-service scenario state model to build.
 - **`ACCOUNT_NOT_FOUND` is 422 everywhere**, including for an account that
   exists but belongs to someone else — saying "forbidden" would confirm it
   exists.
-- **`POST /fraud-check` with a JSON body** is kept, rather than the spec's
-  `GET ...?account=&amount=`. The body carries recipient-newness and velocity
-  cleanly. **The POC spec should be amended to match**, since the test suite
-  mocks this contract.
+- **The fraud service answers both shapes.** `GET /fraud-check?account=&amount=
+  &recipient=&ip=` exactly as the spec documents (plus optional
+  `recipientIsNew` and `recentTransferCount`, which a stateless service cannot
+  know on its own), and the same call as a `POST` with a JSON body. The
+  middleware uses GET. A WireMock stub written from the spec will match.
 
 ## Still open
 1. **One account per customer.** Everything uses
