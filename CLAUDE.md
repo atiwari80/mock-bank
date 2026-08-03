@@ -31,10 +31,6 @@ schema + seed, all six JPA entities and repositories, the error contract,
 `CustomerContext`, fake login, the React shell, the fraud-service skeleton,
 docker-compose, and the smoke test.
 
-**No feature/business logic exists yet.** No transfer, withdraw, billpay,
-account, or approval rules. The fraud service returns a hardcoded
-`{score: 0, decision: "approve"}` behind a TODO. Both verticals start from here.
-
 What is in the middleware today:
 - `com.mockbank.persistence` — 6 entities + 6 Spring Data repositories (shared)
 - `com.mockbank.common` — `ErrorResponse`, `BusinessException`,
@@ -42,13 +38,37 @@ What is in the middleware today:
   `CustomerContext`
 - `com.mockbank.auth` — `LoginController` (`POST /login`),
   `SessionController` (`GET /whoami`)
+- `com.mockbank.account` — account summary and statement (paging + date filter)
+- `com.mockbank.withdraw` — the withdraw contract below
+- `com.mockbank.transfer` — transfer fan-out, the fraud client, and approvals
+- `com.mockbank.billpay` — scheduled payments and the state machine
 
-Feature owners add their OWN package (e.g. `com.mockbank.transfer`). Do not put
-feature logic in `common`, `auth`, or `persistence`.
+Feature logic stays in its own package. Do not put it in `common`, `auth`, or
+`persistence`.
 
-Known gap, intentionally left for Account Ops: the dashboard calls
-`GET /accounts/me`, which does not exist yet. It currently shows the real error
-instead of hiding it.
+### Feature progress — all five flows are built
+| Flow | Status |
+| --- | --- |
+| Account & statement view | DONE — paging + date filter, API + UI |
+| Withdraw | DONE — full precedence chain, API + UI |
+| Transfer (fan-out) | DONE — 7 distinct outcomes, API + UI |
+| Large-transfer approval | DONE — park / approve / reject, ambiguity intact |
+| Bill Pay | DONE — state machine + test-driven firing, API + UI |
+| Fraud scoring | DONE — opaque 0–1000 score, four factors |
+
+Every screen is real; there is no `PlaceholderScreen` any more. The smoke suite
+covers all five flows (62 checks).
+
+### Endpoint inventory
+```
+POST /login                              GET  /whoami
+GET  /accounts/me                        GET  /accounts/me/transactions
+GET  /account/{id}                       GET  /transactions/{id}?from=&to=&page=&size=
+POST /withdraw                           POST /transfer            GET /recipients
+GET  /approvals?status=                  POST /approvals/{id}/approve|reject
+POST /schedule-payment                   GET  /scheduled-payments
+POST /scheduled-payments/{id}/cancel     POST /scheduled-payments/run
+```
 
 ## The two verticals (parallel ownership)
 - Person A "Money Out": Transfer (+ fan-out), Large-transfer approval, Fraud-check service.
@@ -105,6 +125,71 @@ Shared/infrastructure codes already emitted by the foundation (do not reuse
 these for business outcomes): CUSTOMER_NOT_FOUND (404 from `/login`), NOT_FOUND,
 BAD_REQUEST, METHOD_NOT_ALLOWED, INTERNAL_ERROR.
 
+## Withdraw contract (SETTLED — from the POC spec, implement exactly)
+- Per-transaction cap **$2,000**. Cumulative daily cap **$2,000**.
+- Boundaries are **inclusive**: `amount <= 2000` passes, `2000.01` fails;
+  `daily_withdrawn + amount <= 2000` passes.
+- **Check order IS the precedence.** First failure wins and is the reason the
+  tests assert on:
+  1. `ACCOUNT_NOT_FOUND` — account exists
+  2. `INSUFFICIENT_FUNDS` — balance >= amount
+  3. `EXCEEDS_TXN_LIMIT` — amount <= 2000
+  4. `EXCEEDS_DAILY_LIMIT` — daily_withdrawn + amount <= 2000
+- A hold or a frozen customer does **NOT** block a withdrawal. Both the spec and
+  the error table omit those codes for Withdraw. Hold blocks transfers only.
+  This is intended, not an oversight.
+- `daily_withdrawn` is a plain accumulator with **no date logic**. It resets when
+  the database is reseeded, which is the point: this is the state-contamination
+  demo. Canonical case: withdraw $1,500 (ok), then $1,000 → `EXCEEDS_DAILY_LIMIT`.
+- On success: debit balance, add to `daily_withdrawn`, write a `withdraw`
+  transaction with status `completed`.
+
+## Transfer fan-out (SETTLED)
+"Fan-out" is the CHAIN of dependency checks inside one transfer — customer
+active → account exists → balance → hold → fraud-check service → recipient
+enrolled — not multiple recipients in one request. It is what gives the pipeline
+a multi-service scenario state model to build.
+
+## Decisions taken while building (do not re-litigate silently)
+- **An approval points at its transfer** through `approvals.transfer_ref`, which
+  holds the id of the `pending` transactions row the transfer parked. Approving
+  debits and completes that row; rejecting marks it `failed`. The money does not
+  move while it sits pending.
+- **Approvals are resolved** via `POST /approvals/{id}/approve|reject`, with
+  `GET /approvals?status=pending` to list them. Deciding twice →
+  `APPROVAL_ALREADY_RESOLVED`.
+- **Bill Pay never fires on a timer.** `POST /scheduled-payments/run {asOfDate}`
+  advances every due payment exactly ONE step, so tests control the clock and
+  can still observe the intermediate `pending` state.
+- **Cancelling deletes the row.** The frozen `status` enum has no `cancelled`
+  value. `NOT_CANCELLABLE` fires for any status other than `scheduled`.
+- **IP risk arrives as the optional `X-Ip-Risk` header** (0–100, default 0) and
+  is passed straight through to the fraud service. Velocity is derived from
+  `transactions` by the middleware.
+- **`ACCOUNT_NOT_FOUND` is 422 everywhere**, including for an account that
+  exists but belongs to someone else — saying "forbidden" would confirm it
+  exists.
+- **`POST /fraud-check` with a JSON body** is kept, rather than the spec's
+  `GET ...?account=&amount=`. The body carries recipient-newness and velocity
+  cleanly. **The POC spec should be amended to match**, since the test suite
+  mocks this contract.
+
+## Still open
+1. **One account per customer.** Everything uses
+   `findFirstByCustomerIdOrderByIdAsc` or an explicit id owned by the caller.
+   Adding a second account per customer needs a deliberate pass.
+2. **Should the README stay deliberately incomplete?** Open question 3 in the
+   POC spec. It doubles as the brownfield "documentation" context, so how
+   complete it is changes the difficulty of that demo.
+3. **Brownfield exposure of the fraud service.** The scoring lives in
+   `fraud-service` source. If the pipeline reads the whole repo as brownfield
+   context it can simply read the weights instead of mocking the service.
+   Consider excluding that directory from the brownfield context.
+
+**Never document the fraud scoring internals in this repo's docs** (README,
+CLAUDE.md). The weights and thresholds live in the fraud-service source only.
+The suite must mock the service, not reverse-engineer it.
+
 ## DELIBERATE AMBIGUITY — do not resolve (Person A / Transfer)
 Transfers over $10,000 route to an approval flow instead of completing. What
 EXACTLY triggers "needs approval" is intentionally left vague in both code and
@@ -122,8 +207,17 @@ The UI session lives in React state only — no localStorage, no sessionStorage,
 no cookie. Keep everything minimal and readable — this is a specimen,
 clean-and-functional beats fancy.
 
-## Seed personas
-1 Alice Nguyen — $5,000, no hold, 2 enrolled + 1 un-enrolled recipient, 4 txns
-2 Brian Kowalski — $3,200, account hold = true
-3 Chloe Ramos — $50 (insufficient-funds paths)
-4 Dev Patel — $25,000, one enrolled recipient (large transfers / fraud paths)
+## Seed personas (V2 + V3)
+1 Alice Nguyen — $5,000, no hold. 2 enrolled + 1 un-enrolled recipient.
+  **34 transactions, May–Aug 2026**, across completed/pending/failed — this is
+  the account for date-range filtering and pagination. Also 4 scheduled
+  payments, one in each state (scheduled / pending / paid / failed).
+2 Brian Kowalski — $3,200, account hold = true. Blocks transfers, NOT withdrawals.
+3 Chloe Ramos — $50, no transactions (insufficient funds + empty statement)
+4 Dev Patel — $25,000, one enrolled + one un-enrolled recipient
+  (large transfers, approval routing, fraud paths)
+5 Frank Osei — **frozen**, $4,000, one enrolled recipient. The only way to
+  reach `CUSTOMER_INACTIVE`.
+6 Priya Shah — $6,000, `daily_withdrawn` already 1,800.00. Lets a SINGLE call
+  hit the daily cap: withdraw 200 → exactly 2,000, allowed (inclusive boundary);
+  withdraw 500 → `EXCEEDS_DAILY_LIMIT` without tripping the per-txn limit too.

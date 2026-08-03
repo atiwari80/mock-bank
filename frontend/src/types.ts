@@ -14,10 +14,7 @@ export interface WhoAmIResponse {
   status: string
 }
 
-/**
- * GET /accounts/me — owned by the Account Ops vertical and not implemented yet.
- * Declared here so the dashboard is already typed against it.
- */
+/** GET /accounts/me and GET /account/{id} */
 export interface AccountSummary {
   id: number
   customerId: number
@@ -27,13 +24,62 @@ export interface AccountSummary {
   status: string
 }
 
-/** GET /accounts/me/transactions */
+/** GET /accounts/me/transactions and the items of GET /transactions/{id} */
 export interface StatementTransaction {
   id: number
   type: 'transfer' | 'withdraw' | 'billpay'
   amount: number | string
   status: 'completed' | 'pending' | 'failed'
   createdAt: string
+}
+
+/** Envelope for any paged list. */
+export interface Paged<T> {
+  items: T[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+}
+
+/** GET /recipients */
+export interface Recipient {
+  id: number
+  name: string
+  enrolled: boolean
+}
+
+/** POST /transfer — status is 'completed' or 'pending_approval' */
+export interface TransferResult {
+  transferId: number
+  status: string
+  approvalId: number | null
+  transferRef: string
+  balance: number | string
+}
+
+/** POST /withdraw */
+export interface WithdrawResult {
+  transactionId: number
+  balance: number | string
+  dailyWithdrawn: number | string
+}
+
+/** POST /schedule-payment, GET /scheduled-payments */
+export interface ScheduledPayment {
+  id: number
+  payee: string
+  amount: number | string
+  fireDate: string
+  status: 'scheduled' | 'pending' | 'paid' | 'failed'
+}
+
+/** POST /scheduled-payments/run */
+export interface RunResult {
+  asOf: string
+  queued: number
+  paid: number
+  failed: number
 }
 
 /** The single error body the middleware returns for every failure. */

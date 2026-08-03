@@ -16,10 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class FraudCheckController {
 
+    private final FraudScorer scorer = new FraudScorer();
+
     @PostMapping("/fraud-check")
     public FraudCheckResponse check(@RequestBody FraudCheckRequest request) {
-        // TODO: Person A implements opaque scoring.
-        return new FraudCheckResponse(0, "approve");
+        return scorer.score(request);
     }
 
     public record FraudCheckRequest(
