@@ -49,12 +49,17 @@ docker-compose --profile test run --rm smoke
 
 `smoke` is a small curl container that joins the compose network and calls the
 services by name — `middleware:8080`, `fraud-service:8081`, and the UI through
-`frontend:80` including its `/api` proxy. It asserts the wiring and the error
-contract (login, 401 / 404 / 400 / 405 shapes, the fraud stub, SPA deep links,
-and that error reasons survive the proxy). It exits non-zero if anything is off.
+`frontend:80` including its `/api` proxy. **62 checks** covering login, the error
+contract, all five flows (including both fraud branches, the approval lifecycle
+and the bill-pay state machine), the seed fixtures, and that error reasons
+survive the proxy. It exits non-zero if anything is off.
 
-It deliberately does not assert feature rules — those belong to whoever owns the
-feature.
+The read-only checks run first and the state-changing ones last, so it wants a
+freshly-seeded database: `docker-compose down && docker-compose up -d` before a
+re-run.
+
+Note it is a wiring check, not the test suite — generating the real tests is the
+job of the pipeline this app is a specimen for.
 
 ---
 
@@ -76,10 +81,12 @@ a cookie — so reloading the page signs you out.
 
 | Id | Name           | Account state                    | What it's for                                       |
 | -- | -------------- | -------------------------------- | --------------------------------------------------- |
-| 1  | Alice Nguyen   | $5,000, no hold                  | The happy path. Has enrolled recipients, an un-enrolled one, and a short transaction history across completed / pending / failed. |
-| 2  | Brian Kowalski | $3,200, **hold on the account**  | Money-out attempts that get stopped by the hold.     |
-| 3  | Chloe Ramos    | $50                              | Not-enough-money paths.                              |
+| 1  | Alice Nguyen   | $5,000, no hold                  | The happy path. Enrolled recipients plus an un-enrolled one, 34 transactions spanning May–Aug 2026 across completed / pending / failed, and scheduled payments in all four states. |
+| 2  | Brian Kowalski | $3,200, **hold on the account**  | Transfers stopped by the hold.                       |
+| 3  | Chloe Ramos    | $50, no history                  | Not-enough-money paths, and an empty statement.      |
 | 4  | Dev Patel      | $25,000, no hold                 | Well funded — large transfers and anything that needs to interest the fraud service. |
+| 5  | Frank Osei     | **frozen customer**, $4,000      | A customer whose account is fine but whose profile isn't. |
+| 6  | Priya Shah     | $6,000, part-way through the day's withdrawals | Hitting the daily cap in a single withdrawal instead of two. |
 
 ---
 
@@ -108,6 +115,8 @@ format to handle.
 
 ### 1. Transfer — sending money to a recipient
 
+`POST /transfer {fromAccount, toRecipient, amount}` · `GET /recipients`
+
 You pick one of your saved recipients, enter an amount, and send. Before any
 money moves the middleware checks the state of your customer record and account,
 whether you have the funds, and whether the recipient is someone you're actually
@@ -123,10 +132,15 @@ Refusals you can hit: `CUSTOMER_INACTIVE`, `ACCOUNT_NOT_FOUND`,
 
 ### 2. Large-transfer approval
 
+`GET /approvals?status=pending` · `POST /approvals/{id}/approve` ·
+`POST /approvals/{id}/reject`
+
 Transfers of an unusually large size don't complete straight away. Instead of
 debiting the account, the middleware parks the transfer and raises an approval
 request; the transfer stays pending until someone approves or rejects it. The
 customer sees that their transfer is awaiting approval rather than a refusal.
+Approving releases the money and completes it; rejecting voids it. Nothing
+leaves the account while it waits.
 
 Exactly which transfers get routed this way is a matter of policy rather than a
 single published number — size is the main driver, and other circumstances of
@@ -139,29 +153,53 @@ gets `APPROVAL_ALREADY_RESOLVED`.
 
 ### 3. Withdraw — taking cash out
 
-You enter an amount and withdraw it from your account. Withdrawals are subject
-to limits: there's a cap on a single withdrawal, and a separate cap on how much
-you can take out across a day (the running total is tracked per account). A
-successful withdrawal debits the balance, adds to the day's running total, and is
-recorded in the transaction history.
+`POST /withdraw {account, amount}`
+
+You enter an amount and withdraw it from your account. Two limits apply: no
+single withdrawal may exceed **$2,000**, and the running total for the day may
+not exceed **$2,000** either. Both are inclusive — exactly $2,000 is fine.
+A successful withdrawal debits the balance, adds to the day's running total, and
+is recorded in the transaction history.
+
+The checks run in a fixed order and the first one to fail is the one you're told
+about: account exists → you have the funds → the single-withdrawal cap → the
+daily total. So asking for $2,500 from an account holding $50 tells you about
+the money, not the cap.
+
+A hold on the account does *not* stop a withdrawal — holds only stop transfers.
 
 Refusals: `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `EXCEEDS_TXN_LIMIT`,
 `EXCEEDS_DAILY_LIMIT`.
 
 ### 4. Bill Pay — scheduled payments
 
-You schedule a payment to a payee for a future date. Scheduled payments move
-through their lifecycle — `scheduled` → `pending` → `paid` or `failed` — and you
-can see what's coming up. A scheduled payment can be cancelled while it's still
-genuinely cancellable; once it's moved past that point, cancelling returns
-`NOT_CANCELLABLE`.
+`POST /schedule-payment {payee, amount, date}` · `GET /scheduled-payments` ·
+`POST /scheduled-payments/{id}/cancel` · `POST /scheduled-payments/run {asOfDate}`
+
+You schedule a payment to a payee for a future date. Payments move through
+`scheduled` → `pending` → `paid`, or `failed` if the money isn't there when they
+fire.
+
+Nothing fires on a timer. `run` advances everything due as at a date you choose
+by exactly one step, which means a caller decides when "the date arrives" and can
+watch a payment sit in `pending` before it settles.
+
+A payment can be cancelled only while it's still `scheduled`; once it has started
+moving, cancelling returns `NOT_CANCELLABLE`.
 
 ### 5. Account & statements
 
+`GET /account/{id}` · `GET /transactions/{id}?from=&to=&page=&size=`
+
 The dashboard shows the current available balance and whether the account is
-under a hold. The statement view lists the account's transactions — transfers,
-withdrawals and bill payments together — with their amounts, dates and statuses,
-including the ones that are pending or failed.
+under a hold. The statement lists the account's transactions — transfers,
+withdrawals and bill payments together — newest first, with amounts, dates and
+statuses, including pending and failed ones. It can be narrowed to a date range
+and comes back a page at a time (default 10) alongside the totals, so a long
+history can be walked through.
+
+Asking for an account that isn't yours returns `ACCOUNT_NOT_FOUND` — the same as
+one that doesn't exist.
 
 ---
 
@@ -200,22 +238,24 @@ docker-compose.yml
 CLAUDE.md        Working context and rules for this repo
 ```
 
-### Shared foundation vs. feature code
+### How the middleware is laid out
 
-The schema, the JPA entities and repositories, the error contract, login, the
-React shell and the dashboard are **shared and frozen** — they're built once and
-the feature work sits on top of them. In particular, the six tables and their
-columns are not to be changed from a feature branch.
+The schema, the JPA entities and repositories, the error contract, login and the
+React shell are **shared and frozen** — the feature work sits on top of them, and
+the six tables and their columns are not changed from a feature branch.
 
-Two feature areas are then built independently on that base:
+```
+com.mockbank.persistence   6 entities + repositories (shared)
+com.mockbank.common        error contract, exception handler, CustomerContext
+com.mockbank.auth          POST /login, GET /whoami
+com.mockbank.account       balance + statement
+com.mockbank.withdraw      the withdraw rules
+com.mockbank.transfer      transfer fan-out, fraud client, approvals
+com.mockbank.billpay       scheduled payments
+```
 
-- **Money Out** — transfer, large-transfer approval, the fraud service scoring.
-- **Account Ops** — withdraw, bill pay, account and statement views.
-
-The middleware currently ships the shared layer only: `com.mockbank.persistence`
-(entities + repositories), `com.mockbank.common` (error contract, exception
-handler, `CustomerContext`) and `com.mockbank.auth` (login and `/whoami`).
-Feature packages are added by whoever owns that feature.
+Each flow keeps its rules in its own package; nothing feature-specific lives in
+`common`, `auth` or `persistence`.
 
 ## Data model
 

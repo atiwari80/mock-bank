@@ -3,7 +3,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from './auth/session'
 import LoginScreen from './screens/LoginScreen'
 import Dashboard from './screens/Dashboard'
-import PlaceholderScreen from './screens/PlaceholderScreen'
+import TransferScreen from './screens/TransferScreen'
+import WithdrawScreen from './screens/WithdrawScreen'
+import BillPayScreen from './screens/BillPayScreen'
 import StatementsScreen from './screens/StatementsScreen'
 
 /** Anything behind the login bounces back to it when there is no session. */
@@ -27,12 +29,11 @@ export default function App() {
         }
       />
 
-      {/* Feature routes — each vertical replaces its own placeholder. */}
       <Route
         path="/transfer"
         element={
           <RequireSession>
-            <PlaceholderScreen title="Transfer" owner="Money Out" />
+            <TransferScreen />
           </RequireSession>
         }
       />
@@ -40,7 +41,7 @@ export default function App() {
         path="/withdraw"
         element={
           <RequireSession>
-            <PlaceholderScreen title="Withdraw" owner="Account Ops" />
+            <WithdrawScreen />
           </RequireSession>
         }
       />
@@ -48,7 +49,7 @@ export default function App() {
         path="/billpay"
         element={
           <RequireSession>
-            <PlaceholderScreen title="Bill Pay" owner="Account Ops" />
+            <BillPayScreen />
           </RequireSession>
         }
       />
