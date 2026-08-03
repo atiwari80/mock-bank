@@ -27,6 +27,15 @@ export interface AccountSummary {
   status: string
 }
 
+/** GET /accounts/me/transactions */
+export interface StatementTransaction {
+  id: number
+  type: 'transfer' | 'withdraw' | 'billpay'
+  amount: number | string
+  status: 'completed' | 'pending' | 'failed'
+  createdAt: string
+}
+
 /** The single error body the middleware returns for every failure. */
 export interface ErrorBody {
   reason: string
