@@ -23,9 +23,15 @@ public class FraudClient {
     }
 
     public FraudCheckResponse check(FraudCheckRequest request) {
-        return client.post()
-                .uri("/fraud-check")
-                .body(request)
+        return client.get()
+                .uri(builder -> builder.path("/fraud-check")
+                        .queryParam("account", request.accountId())
+                        .queryParam("amount", request.amount())
+                        .queryParam("recipient", request.recipientId())
+                        .queryParam("ip", request.ipRisk())
+                        .queryParam("recipientIsNew", request.recipientIsNew())
+                        .queryParam("recentTransferCount", request.recentTransferCount())
+                        .build())
                 .retrieve()
                 .body(FraudCheckResponse.class);
     }

@@ -147,6 +147,10 @@ check "over daily cap"        422 'EXCEEDS_DAILY_LIMIT' -X POST "$MIDDLEWARE/wit
 check "cap boundary allows"   200 '"dailyWithdrawn":2000.00' -X POST "$MIDDLEWARE/withdraw" -H "$json" -H 'X-Customer-Id: 6' -d '{"account":6,"amount":200.00}'
 check "one cent past the cap" 422 'EXCEEDS_DAILY_LIMIT' -X POST "$MIDDLEWARE/withdraw" -H "$json" -H 'X-Customer-Id: 6' -d '{"account":6,"amount":0.01}'
 check "amount must be > 0"    400 'BAD_REQUEST'         -X POST "$MIDDLEWARE/withdraw" -H "$json" -H 'X-Customer-Id: 1' -d '{"account":1,"amount":-5}'
+# The spec's own state-contamination example, on an untouched account: neither
+# call breaks a rule on its own, but the second one fails because the first ran.
+check "spec: 1500 allowed"    200 '"dailyWithdrawn":1500.00' -X POST "$MIDDLEWARE/withdraw" -H "$json" -H 'X-Customer-Id: 5' -d '{"account":5,"amount":1500.00}'
+check "spec: then 1000 fails" 422 'EXCEEDS_DAILY_LIMIT'      -X POST "$MIDDLEWARE/withdraw" -H "$json" -H 'X-Customer-Id: 5' -d '{"account":5,"amount":1000.00}'
 
 echo
 echo "--- transfer fan-out ---"
@@ -164,11 +168,17 @@ check "fraud holds review"    422 'FRAUD_REVIEW'  -X POST "$MIDDLEWARE/transfer"
 
 echo
 echo "--- large-transfer approval ---"
+# Two parked transfers so both endings can be walked: one approved, one rejected.
+# Neither debits while pending, so the second still passes the funds check.
 check "large goes to approval" 200 '"status":"pending_approval"' -X POST "$MIDDLEWARE/transfer" -H "$json" -H 'X-Customer-Id: 4' -d '{"fromAccount":4,"toRecipient":4,"amount":15000.00}'
+check "second large parks too" 200 '"status":"pending_approval"' -X POST "$MIDDLEWARE/transfer" -H "$json" -H 'X-Customer-Id: 4' -d '{"fromAccount":4,"toRecipient":4,"amount":12000.00}'
 check "approval is pending"   200 '"status":"pending"'   "$MIDDLEWARE/approvals?status=pending" -H 'X-Customer-Id: 4'
+check "reject voids transfer" 200 '"status":"rejected"'  -X POST "$MIDDLEWARE/approvals/101/reject" -H 'X-Customer-Id: 4'
+check "voided txn is failed"  200 '"status":"failed"'    "$MIDDLEWARE/transactions/4?page=0&size=10" -H 'X-Customer-Id: 4'
 check "approve completes"     200 '"status":"approved"'  -X POST "$MIDDLEWARE/approvals/100/approve" -H 'X-Customer-Id: 4'
+check "approved txn settles"  200 '"balance":10000.00'   "$MIDDLEWARE/account/4" -H 'X-Customer-Id: 4'
 check "cannot decide twice"   422 'APPROVAL_ALREADY_RESOLVED' -X POST "$MIDDLEWARE/approvals/100/approve" -H 'X-Customer-Id: 4'
-check "reject is also final"  422 'APPROVAL_ALREADY_RESOLVED' -X POST "$MIDDLEWARE/approvals/100/reject" -H 'X-Customer-Id: 4'
+check "rejected stays final"  422 'APPROVAL_ALREADY_RESOLVED' -X POST "$MIDDLEWARE/approvals/101/reject" -H 'X-Customer-Id: 4'
 
 echo
 echo "--- bill pay state machine ---"
@@ -178,6 +188,12 @@ check "cancel a scheduled"    200 '"cancelled":true'      -X POST "$MIDDLEWARE/s
 check "cannot cancel paid"    422 'NOT_CANCELLABLE'       -X POST "$MIDDLEWARE/scheduled-payments/3/cancel" -H 'X-Customer-Id: 1'
 # Payment 2 is already 'pending' and due, so one run settles it.
 check "run settles due"       200 '"paid":1'              -X POST "$MIDDLEWARE/scheduled-payments/run" -H "$json" -H 'X-Customer-Id: 1' -d '{"asOfDate":"2026-08-10"}'
+# A payment bigger than the balance it will draw on: it schedules fine, queues
+# fine, and only fails on the day it actually fires.
+check "schedule beyond funds" 200 '"status":"scheduled"'  -X POST "$MIDDLEWARE/schedule-payment" -H "$json" -H 'X-Customer-Id: 3' -d '{"payee":"Rent","amount":500.00,"date":"2026-08-01"}'
+check "run queues it"         200 '"queued":1'            -X POST "$MIDDLEWARE/scheduled-payments/run" -H "$json" -H 'X-Customer-Id: 3' -d '{"asOfDate":"2026-08-10"}'
+check "fires and fails"       200 '"failed":1'            -X POST "$MIDDLEWARE/scheduled-payments/run" -H "$json" -H 'X-Customer-Id: 3' -d '{"asOfDate":"2026-08-10"}'
+check "payment shows failed"  200 '"status":"failed"'     "$MIDDLEWARE/scheduled-payments" -H 'X-Customer-Id: 3'
 
 echo
 echo "passed: $passed  failed: $failed"
