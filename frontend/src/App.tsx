@@ -4,6 +4,7 @@ import { useSession } from './auth/session'
 import LoginScreen from './screens/LoginScreen'
 import Dashboard from './screens/Dashboard'
 import PlaceholderScreen from './screens/PlaceholderScreen'
+import StatementsScreen from './screens/StatementsScreen'
 
 /** Anything behind the login bounces back to it when there is no session. */
 function RequireSession({ children }: { children: ReactNode }) {
@@ -55,7 +56,7 @@ export default function App() {
         path="/statements"
         element={
           <RequireSession>
-            <PlaceholderScreen title="Statements" owner="Account Ops" />
+            <StatementsScreen />
           </RequireSession>
         }
       />

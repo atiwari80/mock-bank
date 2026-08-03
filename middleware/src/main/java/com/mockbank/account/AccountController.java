@@ -5,6 +5,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/accounts")
 public class AccountController {
@@ -21,5 +23,11 @@ public class AccountController {
     public AccountResponse getMyAccount() {
         Long customerId = customerContext.requireCustomerId();
         return accountService.getAccountForCustomer(customerId);
+    }
+
+    @GetMapping("/me/transactions")
+    public List<TransactionResponse> getMyTransactions() {
+        Long customerId = customerContext.requireCustomerId();
+        return accountService.getTransactionsForCustomer(customerId);
     }
 }
