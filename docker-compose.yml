@@ -1,20 +1,15 @@
 # The shared network lets a separate compose project (the testing-automation
-# repo) reach these services by name. It is declared external, so it must exist
-# before `docker compose up`:
+# repo) reach these services by name. It is declared external, so this project
+# does not create it — it must exist first:
 #
 #   docker network create bank-test-network
 #
-# Every service joins both it and this project's own default network, so nothing
-# about running this repo on its own changes.
-networks:
-  bank-test-network:
-    external: true
-
+# Every service also stays on this project's own default network, so running
+# this repo on its own behaves exactly as it always did.
 services:
   postgres:
     image: postgres:16-alpine
     container_name: mockbank-postgres
-    networks: [default, bank-test-network]
     environment:
       POSTGRES_DB: mockbank
       POSTGRES_USER: mockbank
@@ -28,6 +23,9 @@ services:
       retries: 10
     # No named volume on purpose: the DB is disposable. `docker-compose down`
     # then `up` gives you a clean, freshly-migrated, freshly-seeded database.
+    networks:
+      - default
+      - bank-test-network
 
   middleware:
     build:
@@ -35,38 +33,49 @@ services:
       context: .
       dockerfile: middleware/Dockerfile
     container_name: mockbank-middleware
-    networks: [default, bank-test-network]
     environment:
       SERVER_PORT: 8080
       DB_URL: jdbc:postgresql://postgres:5432/mockbank
       DB_USER: mockbank
       DB_PASSWORD: mockbank
-      FRAUD_SERVICE_URL: http://fraud-service:8081
+      # Override to http://wiremock:8080 for generated-test runs. The production
+      # default remains Repo 1's real fraud service.
+      FRAUD_SERVICE_URL: ${FRAUD_SERVICE_URL:-http://fraud-service:8081}
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default
+      - bank-test-network
 
   fraud-service:
     build:
       context: ./fraud-service
     container_name: mockbank-fraud-service
-    networks: [default, bank-test-network]
     environment:
       SERVER_PORT: 8081
     ports:
       - "8081:8081"
+    networks:
+      - default
+      - bank-test-network
 
   frontend:
     build:
       context: ./frontend
     container_name: mockbank-frontend
-    networks: [default, bank-test-network]
     ports:
       - "3000:80"
     depends_on:
       - middleware
+    networks:
+      default: {}
+      # Playwright in the pipeline repo reaches the UI as bank-ui.
+      bank-test-network:
+        aliases:
+          - bank-ui
 
   # Verification, in the network, against service names — nothing runs on the host.
   #   docker compose --profile test run --rm smoke
@@ -74,9 +83,16 @@ services:
     build:
       context: ./smoke
     container_name: mockbank-smoke
-    networks: [default, bank-test-network]
     profiles: ["test"]
     depends_on:
       - middleware
       - fraud-service
       - frontend
+    networks:
+      - default
+      - bank-test-network
+
+networks:
+  bank-test-network:
+    external: true
+    name: bank-test-network
