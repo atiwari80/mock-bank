@@ -1,7 +1,20 @@
+# The shared network lets a separate compose project (the testing-automation
+# repo) reach these services by name. It is declared external, so it must exist
+# before `docker compose up`:
+#
+#   docker network create bank-test-network
+#
+# Every service joins both it and this project's own default network, so nothing
+# about running this repo on its own changes.
+networks:
+  bank-test-network:
+    external: true
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: mockbank-postgres
+    networks: [default, bank-test-network]
     environment:
       POSTGRES_DB: mockbank
       POSTGRES_USER: mockbank
@@ -22,6 +35,7 @@ services:
       context: .
       dockerfile: middleware/Dockerfile
     container_name: mockbank-middleware
+    networks: [default, bank-test-network]
     environment:
       SERVER_PORT: 8080
       DB_URL: jdbc:postgresql://postgres:5432/mockbank
@@ -38,6 +52,7 @@ services:
     build:
       context: ./fraud-service
     container_name: mockbank-fraud-service
+    networks: [default, bank-test-network]
     environment:
       SERVER_PORT: 8081
     ports:
@@ -47,6 +62,7 @@ services:
     build:
       context: ./frontend
     container_name: mockbank-frontend
+    networks: [default, bank-test-network]
     ports:
       - "3000:80"
     depends_on:
@@ -58,6 +74,7 @@ services:
     build:
       context: ./smoke
     container_name: mockbank-smoke
+    networks: [default, bank-test-network]
     profiles: ["test"]
     depends_on:
       - middleware
