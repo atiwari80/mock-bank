@@ -7,6 +7,7 @@ import TransferScreen from './screens/TransferScreen'
 import WithdrawScreen from './screens/WithdrawScreen'
 import BillPayScreen from './screens/BillPayScreen'
 import StatementsScreen from './screens/StatementsScreen'
+import CreditCardScreen from './screens/CreditCardScreen'
 
 /** Anything behind the login bounces back to it when there is no session. */
 function RequireSession({ children }: { children: ReactNode }) {
@@ -58,6 +59,15 @@ export default function App() {
         element={
           <RequireSession>
             <StatementsScreen />
+          </RequireSession>
+        }
+      />
+
+      <Route
+        path="/credit-card"
+        element={
+          <RequireSession>
+            <CreditCardScreen />
           </RequireSession>
         }
       />

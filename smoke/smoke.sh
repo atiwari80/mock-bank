@@ -12,6 +12,7 @@
 
 MIDDLEWARE="http://middleware:8080"
 FRAUD="http://fraud-service:8081"
+CREDIT="http://credit-check-service:8082"
 UI="http://frontend:80"
 
 passed=0
@@ -65,6 +66,7 @@ json='Content-Type: application/json'
 echo "waiting for services..."
 wait_for "$MIDDLEWARE/login" || exit 1
 wait_for "$FRAUD/fraud-check" || exit 1
+wait_for "$CREDIT/credit-check" || exit 1
 wait_for "$UI/" || exit 1
 
 echo
@@ -118,6 +120,10 @@ echo
 echo "--- fraud service ---"
 check "fraud-check stub"      200 '"decision":"approve"' -X POST "$FRAUD/fraud-check" -H "$json" \
     -d '{"accountId":1,"amount":500.00,"recipientId":2,"recipientIsNew":false,"ipRisk":0,"recentTransferCount":1}'
+
+echo
+echo "--- credit check service ---"
+check "credit-check stub"     200 '"score"' "$CREDIT/credit-check?ssn=111111111&customerId=1"
 
 echo
 echo "--- frontend + nginx ---"
@@ -194,6 +200,20 @@ check "schedule beyond funds" 200 '"status":"scheduled"'  -X POST "$MIDDLEWARE/s
 check "run queues it"         200 '"queued":1'            -X POST "$MIDDLEWARE/scheduled-payments/run" -H "$json" -H 'X-Customer-Id: 3' -d '{"asOfDate":"2026-08-10"}'
 check "fires and fails"       200 '"failed":1'            -X POST "$MIDDLEWARE/scheduled-payments/run" -H "$json" -H 'X-Customer-Id: 3' -d '{"asOfDate":"2026-08-10"}'
 check "payment shows failed"  200 '"status":"failed"'     "$MIDDLEWARE/scheduled-payments" -H 'X-Customer-Id: 3'
+
+echo
+echo "--- credit card application ---"
+# Read-only guard: confirm the credit-check service returns the seeded score for SSN 111111111.
+# All apply calls below are mutating (they create credit_application rows).
+check "credit-card: happy path"       200 '"status":"approved"'    -X POST "$MIDDLEWARE/credit-card/apply" -H "$json" -H 'X-Customer-Id: 1' -d '{"customerId":1,"ssn":"111111111","requestedLimit":5000}'
+check "credit-card: unknown customer" 401 'NOT_AUTHENTICATED'       -X POST "$MIDDLEWARE/credit-card/apply" -H "$json" -H 'X-Customer-Id: 999' -d '{"customerId":999,"ssn":"111111111","requestedLimit":5000}'
+check "credit-card: frozen customer"  422 'CUSTOMER_INACTIVE'       -X POST "$MIDDLEWARE/credit-card/apply" -H "$json" -H 'X-Customer-Id: 5' -d '{"customerId":5,"ssn":"555555555","requestedLimit":5000}'
+check "credit-card: ssn too short"    422 'INVALID_SSN'             -X POST "$MIDDLEWARE/credit-card/apply" -H "$json" -H 'X-Customer-Id: 1' -d '{"customerId":1,"ssn":"12345","requestedLimit":5000}'
+check "credit-card: ssn has letters"  422 'INVALID_SSN'             -X POST "$MIDDLEWARE/credit-card/apply" -H "$json" -H 'X-Customer-Id: 1' -d '{"customerId":1,"ssn":"12345678A","requestedLimit":5000}'
+check "credit-card: score declined"   422 'CREDIT_DECLINE'          -X POST "$MIDDLEWARE/credit-card/apply" -H "$json" -H 'X-Customer-Id: 3' -d '{"customerId":3,"ssn":"333333333","requestedLimit":2000}'
+check "credit-card: bankruptcy flag"  422 'FRAUD_DECLINE'           -X POST "$MIDDLEWARE/credit-card/apply" -H "$json" -H 'X-Customer-Id: 1' -d '{"customerId":1,"ssn":"999999999","requestedLimit":5000}'
+# SSN 444444444 returns a bureau score that falls exactly at the approval boundary.
+check "credit-card: borderline score" 422 'CREDIT_DECLINE'          -X POST "$MIDDLEWARE/credit-card/apply" -H "$json" -H 'X-Customer-Id: 4' -d '{"customerId":4,"ssn":"444444444","requestedLimit":3000}'
 
 echo
 echo "passed: $passed  failed: $failed"

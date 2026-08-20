@@ -31,6 +31,11 @@ fraud:
   service:
     base-url: ${FRAUD_SERVICE_URL:http://localhost:8081}
 
+# The credit-check service is a separate app; Feature 6 wires the client to this.
+credit:
+  service:
+    base-url: ${CREDIT_SERVICE_URL:http://localhost:8082}
+
 logging:
   level:
     com.mockbank: INFO

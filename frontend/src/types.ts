@@ -82,6 +82,14 @@ export interface RunResult {
   failed: number
 }
 
+/** POST /credit-card/apply */
+export interface CreditCardResult {
+  applicationId: number
+  status: 'approved' | 'declined'
+  approvedLimit: number | string | null
+  bureauScore: number
+}
+
 /** The single error body the middleware returns for every failure. */
 export interface ErrorBody {
   reason: string

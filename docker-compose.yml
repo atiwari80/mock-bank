@@ -41,6 +41,7 @@ services:
       # Override to http://wiremock:8080 for generated-test runs. The production
       # default remains Repo 1's real fraud service.
       FRAUD_SERVICE_URL: ${FRAUD_SERVICE_URL:-http://fraud-service:8081}
+      CREDIT_SERVICE_URL: ${CREDIT_SERVICE_URL:-http://credit-check-service:8082}
     ports:
       - "8080:8080"
     depends_on:
@@ -58,6 +59,18 @@ services:
       SERVER_PORT: 8081
     ports:
       - "8081:8081"
+    networks:
+      - default
+      - bank-test-network
+
+  credit-check-service:
+    build:
+      context: ./credit-check-service
+    container_name: mockbank-credit-check-service
+    environment:
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
     networks:
       - default
       - bank-test-network
@@ -87,6 +100,7 @@ services:
     depends_on:
       - middleware
       - fraud-service
+      - credit-check-service
       - frontend
     networks:
       - default

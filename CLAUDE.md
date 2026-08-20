@@ -11,11 +11,12 @@ realistic, hard testing scenarios ON PURPOSE so a separate testing pipeline
 that may be intentional — check this file before resolving it.
 
 ## Architecture
-Four containers via docker-compose:
+Five containers via docker-compose:
 - React UI (nginx) — Playwright will test this later
 - Middleware (Spring Boot, Java) — all business logic; REST Assured tests this
 - Postgres — REAL database, containerized so it's disposable/resettable. NOT mocked.
 - Fraud-check service — SEPARATE Spring Boot service, opaque scoring, stateless.
+- Credit-check service — SEPARATE Spring Boot service, opaque bureau records, stateless.
 
 Repo layout:
 - `/middleware`   Spring Boot main app
@@ -46,7 +47,7 @@ What is in the middleware today:
 Feature logic stays in its own package. Do not put it in `common`, `auth`, or
 `persistence`.
 
-### Feature progress — all five flows are built
+### Feature progress — all six flows are built
 | Flow | Status |
 | --- | --- |
 | Account & statement view | DONE — paging + date filter, API + UI |
@@ -55,9 +56,10 @@ Feature logic stays in its own package. Do not put it in `common`, `auth`, or
 | Large-transfer approval | DONE — park / approve / reject, ambiguity intact |
 | Bill Pay | DONE — state machine + test-driven firing, API + UI |
 | Fraud scoring | DONE — opaque 0–1000 score, four factors |
+| Credit Card Application | DONE — bureau check, 4 decline paths, ambiguous boundary, API + UI |
 
 Every screen is real; there is no `PlaceholderScreen` any more. The smoke suite
-covers all five flows (72 checks) and every outcome the POC spec lists.
+covers all six flows and every outcome the POC spec lists.
 
 **State moves.** Balances change, `daily_withdrawn` accumulates and payments
 advance, so anything that runs the app repeatedly must reset the database
@@ -72,7 +74,16 @@ POST /withdraw                           POST /transfer            GET /recipien
 GET  /approvals?status=                  POST /approvals/{id}/approve|reject
 POST /schedule-payment                   GET  /scheduled-payments
 POST /scheduled-payments/{id}/cancel     POST /scheduled-payments/run
+POST /credit-card/apply
 ```
+
+Credit-check service (port 8082):
+```
+GET  /credit-check?ssn=&customerId=
+```
+
+## Error codes (additions for Feature 6)
+Credit Card: `INVALID_SSN`, `CREDIT_DECLINE` (plus `FRAUD_DECLINE` and `CUSTOMER_INACTIVE` already in the list)
 
 ## The two verticals (parallel ownership)
 - Person A "Money Out": Transfer (+ fan-out), Large-transfer approval, Fraud-check service.
@@ -195,6 +206,18 @@ a multi-service scenario state model to build.
 CLAUDE.md). The weights and thresholds live in the fraud-service source only.
 The suite must mock the service, not reverse-engineer it.
 
+**Never document the credit-check bureau records in this repo's docs** (README,
+CLAUDE.md). The SSN-to-score mappings live in the credit-check-service source
+only. The suite must mock the service, not read the seed map.
+
+## DELIBERATE AMBIGUITY — do not resolve (Feature 6 / Credit Card)
+The approval threshold in `CreditCardService` is named `APPROVAL_THRESHOLD` and
+set to 620. Whether a bureau score of exactly 620 is approved or declined is
+intentionally undocumented. The code implements one behaviour; that behaviour is
+not described here, in the README, or in any comment. The testing pipeline must
+FLAG this as an SME question — it should not infer the boundary from the constant
+name alone.
+
 ## DELIBERATE AMBIGUITY — do not resolve (Person A / Transfer)
 Transfers over $10,000 route to an approval flow instead of completing. What
 EXACTLY triggers "needs approval" is intentionally left vague in both code and
@@ -217,12 +240,19 @@ clean-and-functional beats fancy.
   **34 transactions, May–Aug 2026**, across completed/pending/failed — this is
   the account for date-range filtering and pagination. Also 4 scheduled
   payments, one in each state (scheduled / pending / paid / failed).
+  **Credit card:** SSN `111111111` → approved (high score). SSN `999999999` →
+  `FRAUD_DECLINE` (bankruptcy flag — any active customer with this SSN hits it).
 2 Brian Kowalski — $3,200, account hold = true. Blocks transfers, NOT withdrawals.
-3 Chloe Ramos — $50, no transactions (insufficient funds + empty statement)
+3 Chloe Ramos — $50, no transactions (insufficient funds + empty statement).
+  **Credit card:** SSN `333333333` → `CREDIT_DECLINE` (low score).
 4 Dev Patel — $25,000, one enrolled + one un-enrolled recipient
-  (large transfers, approval routing, fraud paths)
+  (large transfers, approval routing, fraud paths).
+  **Credit card:** SSN `444444444` → score is exactly at the approval boundary.
+  Whether this results in `CREDIT_DECLINE` or approved is deliberately ambiguous —
+  this is the spec's intended SME question for the testing pipeline.
 5 Frank Osei — **frozen**, $4,000, one enrolled recipient. The only way to
-  reach `CUSTOMER_INACTIVE`.
+  reach `CUSTOMER_INACTIVE`. Also fires `CUSTOMER_INACTIVE` for any credit card
+  application before the bureau check even runs.
 6 Priya Shah — $6,000, `daily_withdrawn` already 1,800.00. Lets a SINGLE call
   hit the daily cap: withdraw 200 → exactly 2,000, allowed (inclusive boundary);
   withdraw 500 → `EXCEEDS_DAILY_LIMIT` without tripping the per-txn limit too.

@@ -10,6 +10,7 @@ const FEATURES = [
   { label: 'Withdraw', path: '/withdraw' },
   { label: 'Bill Pay', path: '/billpay' },
   { label: 'Statements', path: '/statements' },
+  { label: 'Credit Card', path: '/credit-card' },
 ]
 
 export default function Dashboard() {
