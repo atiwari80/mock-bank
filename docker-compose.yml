@@ -28,6 +28,7 @@ services:
       DB_USER: mockbank
       DB_PASSWORD: mockbank
       FRAUD_SERVICE_URL: http://fraud-service:8081
+      CREDIT_SERVICE_URL: http://credit-check-service:8082
     ports:
       - "8080:8080"
     depends_on:
@@ -42,6 +43,15 @@ services:
       SERVER_PORT: 8081
     ports:
       - "8081:8081"
+
+  credit-check-service:
+    build:
+      context: ./credit-check-service
+    container_name: mockbank-credit-check-service
+    environment:
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
 
   frontend:
     build:
@@ -62,4 +72,5 @@ services:
     depends_on:
       - middleware
       - fraud-service
+      - credit-check-service
       - frontend

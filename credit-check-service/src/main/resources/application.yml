@@ -1,0 +1,10 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: mock-bank-credit-check-service
+
+logging:
+  level:
+    com.mockbank.creditcheck: INFO
