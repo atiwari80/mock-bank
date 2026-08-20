@@ -1,3 +1,11 @@
+# The shared network lets a separate compose project (the testing-automation
+# repo) reach these services by name. It is declared external, so this project
+# does not create it — it must exist first:
+#
+#   docker network create bank-test-network
+#
+# Every service also stays on this project's own default network, so running
+# this repo on its own behaves exactly as it always did.
 services:
   postgres:
     image: postgres:16-alpine
@@ -15,6 +23,9 @@ services:
       retries: 10
     # No named volume on purpose: the DB is disposable. `docker-compose down`
     # then `up` gives you a clean, freshly-migrated, freshly-seeded database.
+    networks:
+      - default
+      - bank-test-network
 
   middleware:
     build:
@@ -27,13 +38,18 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/mockbank
       DB_USER: mockbank
       DB_PASSWORD: mockbank
-      FRAUD_SERVICE_URL: http://fraud-service:8081
-      CREDIT_SERVICE_URL: http://credit-check-service:8082
+      # Override to http://wiremock:8080 for generated-test runs. The production
+      # default remains Repo 1's real fraud service.
+      FRAUD_SERVICE_URL: ${FRAUD_SERVICE_URL:-http://fraud-service:8081}
+      CREDIT_SERVICE_URL: ${CREDIT_SERVICE_URL:-http://credit-check-service:8082}
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default
+      - bank-test-network
 
   fraud-service:
     build:
@@ -43,6 +59,9 @@ services:
       SERVER_PORT: 8081
     ports:
       - "8081:8081"
+    networks:
+      - default
+      - bank-test-network
 
   credit-check-service:
     build:
@@ -52,6 +71,9 @@ services:
       SERVER_PORT: 8082
     ports:
       - "8082:8082"
+    networks:
+      - default
+      - bank-test-network
 
   frontend:
     build:
@@ -61,6 +83,12 @@ services:
       - "3000:80"
     depends_on:
       - middleware
+    networks:
+      default: {}
+      # Playwright in the pipeline repo reaches the UI as bank-ui.
+      bank-test-network:
+        aliases:
+          - bank-ui
 
   # Verification, in the network, against service names — nothing runs on the host.
   #   docker compose --profile test run --rm smoke
@@ -74,3 +102,11 @@ services:
       - fraud-service
       - credit-check-service
       - frontend
+    networks:
+      - default
+      - bank-test-network
+
+networks:
+  bank-test-network:
+    external: true
+    name: bank-test-network
