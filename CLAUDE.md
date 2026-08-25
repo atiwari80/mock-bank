@@ -32,9 +32,10 @@ frontend 13000, middleware 18080, fraud 18081, credit 18082, postgres 15432.
 In-container ports are unchanged (80 / 8080 / 8081 / 8082 / 5432) and services
 address each other by service name.
 
-`docker-compose.yml` declares `bank-test-network` as **external**, so a cold
-machine needs `docker network create bank-test-network` before the first
-`docker compose up`, or compose refuses to start.
+Everything runs on compose's own default project network. There is no external or
+shared network to create first: `docker compose up -d --wait` works on a bare
+machine. Anything that needs to reach these containers from outside the project
+attaches them to its own network rather than this repo declaring one.
 
 ## Current state (read this before starting work)
 **Step 0 is DONE and FROZEN.** The shared foundation exists and is verified:

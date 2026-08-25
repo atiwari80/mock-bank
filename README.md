@@ -15,27 +15,19 @@ passwords and no real payment rails.
 
 ## Running it from a cold machine
 
-Three commands, in this order:
+Two commands, no setup beforehand:
 
 ```bash
-docker network create bank-test-network        # 1. once per machine
-docker compose up -d --wait                    # 2. build + start, returns when healthy
-docker compose --profile test run --rm smoke   # 3. verify (82 checks)
+docker compose up -d --wait                    # build + start, returns when healthy
+docker compose --profile test run --rm smoke   # verify (82 checks)
 ```
 
-**Step 1 is not optional.** `docker-compose.yml` declares `bank-test-network` as
-an *external* network, which means compose will not create it. Without it you get:
+Compose creates its own project network and the services find each other by
+service name, so there is nothing to create or configure first.
 
-```
-network bank-test-network declared as external, but could not be found
-```
-
-The network exists so a separate compose project can reach these services by
-name. Nothing in this repo depends on anything being attached to it.
-
-**Step 2** builds the images on first run — that pulls Maven and Node base images
-and takes a few minutes; afterwards it is seconds. `--wait` returns only once
-every service reports healthy, so nothing downstream has to poll or sleep.
+The first command builds the images on first run — that pulls Maven and Node base
+images and takes a few minutes; afterwards it is seconds. `--wait` returns only
+once every service reports healthy, so nothing downstream has to poll or sleep.
 
 **Docker is the only thing you need installed.** Java, Maven, Node and Postgres
 all live inside containers — the middleware and both scoring services compile

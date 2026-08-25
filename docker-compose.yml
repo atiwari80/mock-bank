@@ -1,11 +1,7 @@
-# The shared network lets a separate compose project (the testing-automation
-# repo) reach these services by name. It is declared external, so this project
-# does not create it — it must exist first:
-#
-#   docker network create bank-test-network
-#
-# Every service also stays on this project's own default network, so running
-# this repo on its own behaves exactly as it always did.
+# Everything runs on compose's own default project network, so `docker compose
+# up` works on a bare machine with no setup beforehand. Services find each other
+# by service name: postgres, middleware, fraud-service, credit-check-service,
+# frontend.
 services:
   postgres:
     image: postgres:16-alpine
@@ -14,9 +10,8 @@ services:
       POSTGRES_DB: mockbank
       POSTGRES_USER: mockbank
       POSTGRES_PASSWORD: mockbank
-    # Host ports are shifted out of the way of the testing-pipeline stack, which
-    # already owns 5432/8080/8081 on this machine. Only host access changes —
-    # container-to-container traffic still uses the normal ports.
+    # Host ports sit in the 1xxxx range so this stack can share a machine with
+    # others. Only host access is shifted — in-container ports are unchanged.
     ports:
       - "15432:5432"
     healthcheck:
@@ -24,11 +19,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    # No named volume on purpose: the DB is disposable. `docker-compose down`
+    # No named volume on purpose: the DB is disposable. `docker compose down`
     # then `up` gives you a clean, freshly-migrated, freshly-seeded database.
-    networks:
-      - default
-      - bank-test-network
 
   middleware:
     build:
@@ -41,8 +33,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/mockbank
       DB_USER: mockbank
       DB_PASSWORD: mockbank
-      # Override to http://wiremock:8080 for generated-test runs. The production
-      # default remains Repo 1's real fraud service.
+      # Point these at a stub to swap either scoring service out; the defaults
+      # are the real ones in this project.
       FRAUD_SERVICE_URL: ${FRAUD_SERVICE_URL:-http://fraud-service:8081}
       CREDIT_SERVICE_URL: ${CREDIT_SERVICE_URL:-http://credit-check-service:8082}
     ports:
@@ -59,9 +51,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - default
-      - bank-test-network
 
   fraud-service:
     build:
@@ -77,9 +66,6 @@ services:
       timeout: 3s
       retries: 12
       start_period: 30s
-    networks:
-      - default
-      - bank-test-network
 
   credit-check-service:
     build:
@@ -95,9 +81,6 @@ services:
       timeout: 3s
       retries: 12
       start_period: 30s
-    networks:
-      - default
-      - bank-test-network
 
   frontend:
     build:
@@ -115,14 +98,9 @@ services:
       start_period: 10s
     depends_on:
       - middleware
-    networks:
-      default: {}
-      # Playwright in the pipeline repo reaches the UI as bank-ui.
-      bank-test-network:
-        aliases:
-          - bank-ui
 
-  # Verification, in the network, against service names — nothing runs on the host.
+  # Verification, on the project network, against service names — nothing runs
+  # on the host.
   #   docker compose --profile test run --rm smoke
   smoke:
     build:
@@ -134,11 +112,3 @@ services:
       - fraud-service
       - credit-check-service
       - frontend
-    networks:
-      - default
-      - bank-test-network
-
-networks:
-  bank-test-network:
-    external: true
-    name: bank-test-network
