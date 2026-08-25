@@ -88,8 +88,12 @@ export default function CreditCardScreen() {
           <ErrorBanner error={error} />
           {result ? (
             <p>
-              ✅ Application <strong>{result.status}</strong> — assigned limit{' '}
-              {formatMoney(result.approvedLimit)}.
+              ✅ Application <strong>{result.status}</strong>
+              {/* A decline comes back as CREDIT_DECLINE, so a result always
+                  carries a limit — but the column is nullable, so guard it. */}
+              {result.approvedLimit === null
+                ? '.'
+                : ` — assigned limit ${formatMoney(result.approvedLimit)}.`}
             </p>
           ) : null}
         </div>
