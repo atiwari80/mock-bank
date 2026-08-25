@@ -28,10 +28,16 @@ host, and no build output is written back into the working tree.
 
 | Service       | URL                     | Notes                                        |
 | ------------- | ----------------------- | -------------------------------------------- |
-| Frontend      | http://localhost:3000   | nginx serving the built React app             |
-| Middleware    | http://localhost:8080   | REST API, all business logic                  |
-| Fraud service | http://localhost:8081   | `POST /fraud-check`, stateless                |
-| Postgres      | localhost:5432          | db `mockbank`, user/password `mockbank`       |
+| Frontend      | http://localhost:13000  | nginx serving the built React app             |
+| Middleware    | http://localhost:18080  | REST API, all business logic                  |
+| Fraud service | http://localhost:18081  | `GET /fraud-check`, stateless                 |
+| Credit check  | http://localhost:18082  | `GET /credit-check`, stateless                |
+| Postgres      | localhost:15432         | db `mockbank`, user/password `mockbank`       |
+
+Those are **host** ports only, shifted into the 1xxxx range so this stack can run
+alongside other things on the same machine. Inside Docker the services still
+listen on their normal ports and address each other as `middleware:8080`,
+`fraud-service:8081`, `credit-check-service:8082` and `postgres:5432`.
 
 The UI talks to the middleware through `/api/*` on its own origin — nginx proxies
 that to `middleware:8080`, so there is no CORS setup to worry about.
@@ -210,7 +216,8 @@ one that doesn't exist.
 
 ## The fraud service
 
-A separate Spring Boot app on port 8081, with no database of its own. The
+A separate Spring Boot app listening on 8081 inside Docker (published to the host
+as 18081), with no database of its own. The
 middleware posts it the details of a money-out attempt — account, amount,
 recipient, whether the recipient is new, an IP risk signal, and how many recent
 transfers the account has made — and gets back a score and a decision.

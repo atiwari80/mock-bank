@@ -14,8 +14,11 @@ services:
       POSTGRES_DB: mockbank
       POSTGRES_USER: mockbank
       POSTGRES_PASSWORD: mockbank
+    # Host ports are shifted out of the way of the testing-pipeline stack, which
+    # already owns 5432/8080/8081 on this machine. Only host access changes —
+    # container-to-container traffic still uses the normal ports.
     ports:
-      - "5432:5432"
+      - "15432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mockbank -d mockbank"]
       interval: 5s
@@ -43,7 +46,7 @@ services:
       FRAUD_SERVICE_URL: ${FRAUD_SERVICE_URL:-http://fraud-service:8081}
       CREDIT_SERVICE_URL: ${CREDIT_SERVICE_URL:-http://credit-check-service:8082}
     ports:
-      - "8080:8080"
+      - "18080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,7 +61,7 @@ services:
     environment:
       SERVER_PORT: 8081
     ports:
-      - "8081:8081"
+      - "18081:8081"
     networks:
       - default
       - bank-test-network
@@ -70,7 +73,7 @@ services:
     environment:
       SERVER_PORT: 8082
     ports:
-      - "8082:8082"
+      - "18082:8082"
     networks:
       - default
       - bank-test-network
@@ -80,7 +83,7 @@ services:
       context: ./frontend
     container_name: mockbank-frontend
     ports:
-      - "3000:80"
+      - "13000:80"
     depends_on:
       - middleware
     networks:
