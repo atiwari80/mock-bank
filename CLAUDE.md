@@ -21,28 +21,44 @@ Five containers via docker-compose:
 Repo layout:
 - `/middleware`   Spring Boot main app
 - `/fraud-service` Spring Boot fraud-check service (separate app)
+- `/credit-check-service` Spring Boot bureau-check service (separate app)
 - `/frontend`     React app
 - `/db`           Flyway migrations + seed
-- `/smoke`        Containerised smoke test for the shared foundation
+- `/smoke`        Containerised smoke test
 - `CLAUDE.md`, `README.md`
+
+**Host ports are remapped** so this stack can coexist with others on one machine:
+frontend 13000, middleware 18080, fraud 18081, credit 18082, postgres 15432.
+In-container ports are unchanged (80 / 8080 / 8081 / 8082 / 5432) and services
+address each other by service name.
+
+`docker-compose.yml` declares `bank-test-network` as **external**, so a cold
+machine needs `docker network create bank-test-network` before the first
+`docker compose up`, or compose refuses to start.
 
 ## Current state (read this before starting work)
 **Step 0 is DONE and FROZEN.** The shared foundation exists and is verified:
-schema + seed, all six JPA entities and repositories, the error contract,
-`CustomerContext`, fake login, the React shell, the fraud-service skeleton,
+schema + seed, the JPA entities and repositories, the error contract,
+`CustomerContext`, fake login, the React shell, both scoring services,
 docker-compose, and the smoke test.
 
 What is in the middleware today:
-- `com.mockbank.persistence` — 6 entities + 6 Spring Data repositories (shared)
+- `com.mockbank.persistence` — 7 entities + 7 Spring Data repositories (shared)
 - `com.mockbank.common` — `ErrorResponse`, `BusinessException`,
   `NotFoundException`, `NotAuthenticatedException`, `GlobalExceptionHandler`,
-  `CustomerContext`
+  `CustomerContext`, `HealthController` (`GET /health`)
 - `com.mockbank.auth` — `LoginController` (`POST /login`),
   `SessionController` (`GET /whoami`)
 - `com.mockbank.account` — account summary and statement (paging + date filter)
 - `com.mockbank.withdraw` — the withdraw contract below
 - `com.mockbank.transfer` — transfer fan-out, the fraud client, and approvals
 - `com.mockbank.billpay` — scheduled payments and the state machine
+- `com.mockbank.creditcard` — credit card application and the credit-check client
+
+Both scoring services also serve `GET /health`. All five containers have a real
+compose healthcheck (the Spring apps via `/health`, nginx by fetching
+`index.html`, Postgres via `pg_isready`), so `docker compose up -d --wait`
+returns only when everything is genuinely serving.
 
 Feature logic stays in its own package. Do not put it in `common`, `auth`, or
 `persistence`.
@@ -61,9 +77,10 @@ Feature logic stays in its own package. Do not put it in `common`, `auth`, or
 Every screen is real; there is no `PlaceholderScreen` any more. The smoke suite
 covers all six flows and every outcome the POC spec lists.
 
-**State moves.** Balances change, `daily_withdrawn` accumulates and payments
-advance, so anything that runs the app repeatedly must reset the database
-between cycles: `docker compose down && docker compose up -d`.
+**State moves.** Balances change, `daily_withdrawn` accumulates, approvals
+resolve, payments advance and credit applications are recorded — so anything
+running the app repeatedly must reset between cycles:
+`docker compose down && docker compose up -d --wait`.
 
 ### Endpoint inventory
 ```
@@ -83,8 +100,19 @@ Credit-check service (port 8082):
 GET  /credit-check?ssn=&customerId=
 ```
 
-## Error codes (additions for Feature 6)
-Credit Card: `INVALID_SSN`, `CREDIT_DECLINE` (plus `FRAUD_DECLINE` and `CUSTOMER_INACTIVE` already in the list)
+Both scoring services also answer `GET /health`.
+
+## Credit card contract
+`POST /credit-card/apply {ssn, requestedLimit}` — identity comes from the
+`X-Customer-Id` header. The body also accepts a `customerId` field, which is
+**ignored**; do not start trusting it.
+
+Only approvals return 200, so `ApplyResponse.status` is always `approved` when a
+caller gets one — every refusal is a 422. Declined applications are still written
+to `credit_applications`. Reason codes: `CUSTOMER_INACTIVE`, `INVALID_SSN`
+(exactly 9 digits), `FRAUD_DECLINE` (bankruptcy flag on the bureau report),
+`CREDIT_DECLINE` (standing below the bank's bar — the threshold lives in
+`CreditCardService`, not in any doc).
 
 ## The two verticals (parallel ownership)
 - Person A "Money Out": Transfer (+ fan-out), Large-transfer approval, Fraud-check service.
@@ -99,13 +127,19 @@ recipients(id, customer_id, name, enrolled bool)
 transactions(id, account_id, type['transfer'|'withdraw'|'billpay'], amount, status['completed'|'pending'|'failed'], created_at)
 scheduled_payments(id, account_id, payee, amount, fire_date, status['scheduled'|'pending'|'paid'|'failed'])
 approvals(id, transfer_ref, amount, status['pending'|'approved'|'rejected'], created_at)
+credit_applications(id, customer_id, ssn_hash, requested_limit, approved_limit, status['pending'|'approved'|'declined'], bureau_score, created_at)
 
-Migrations live in `/db/migrations` (`V1__schema.sql`, `V2__seed.sql`) and are
-the single source of truth — the middleware Docker build copies them onto its
+Migrations live in `/db/migrations` — `V1__schema.sql` (the first six tables),
+`V2__seed.sql`, `V3__seed_expand.sql` (customers 5–6, the deep history, all four
+payment states) and `V4__credit_applications.sql` (the seventh table). They are
+the single source of truth; the middleware Docker build copies them onto its
 classpath. Hibernate runs `ddl-auto: validate`, so entities are checked against
-the migrated schema and can never alter it. Seeded ids are 1..4; identity
+the migrated schema and can never alter it. Seeded ids are 1..6; identity
 sequences restart at 100 so application inserts never collide with the seed.
-Do NOT add a V3 migration without agreement from both vertical owners.
+Adding a migration is a shared decision — agree it before writing one.
+
+The raw SSN is never persisted: `credit_applications.ssn_hash` holds a SHA-256
+hex digest of what the applicant submitted.
 
 ## Iron rules (apply to ALL code)
 1. **Distinct error reasons.** Every business failure returns
@@ -130,12 +164,18 @@ Do NOT add a V3 migration without agreement from both vertical owners.
    `docker compose --profile test run --rm smoke`.
 
 ## Error codes (the contract)
-Transfer:  CUSTOMER_INACTIVE, ACCOUNT_NOT_FOUND, INSUFFICIENT_FUNDS, ACCOUNT_HOLD,
-           FRAUD_DECLINE, FRAUD_REVIEW, RECIPIENT_NOT_ENROLLED
-Approval:  APPROVAL_ALREADY_RESOLVED
-Withdraw:  ACCOUNT_NOT_FOUND, INSUFFICIENT_FUNDS, EXCEEDS_TXN_LIMIT, EXCEEDS_DAILY_LIMIT
-Bill Pay:  NOT_CANCELLABLE
-Auth:      NOT_AUTHENTICATED
+Transfer:    CUSTOMER_INACTIVE, ACCOUNT_NOT_FOUND, INSUFFICIENT_FUNDS, ACCOUNT_HOLD,
+             FRAUD_DECLINE, FRAUD_REVIEW, RECIPIENT_NOT_ENROLLED
+Approval:    APPROVAL_ALREADY_RESOLVED, APPROVAL_NOT_FOUND, TRANSFER_NOT_FOUND,
+             INSUFFICIENT_FUNDS (the balance can move while a transfer sits parked)
+Withdraw:    ACCOUNT_NOT_FOUND, INSUFFICIENT_FUNDS, EXCEEDS_TXN_LIMIT, EXCEEDS_DAILY_LIMIT
+Bill Pay:    NOT_CANCELLABLE, PAYMENT_NOT_FOUND, ACCOUNT_NOT_FOUND
+Credit Card: CUSTOMER_INACTIVE, INVALID_SSN, FRAUD_DECLINE, CREDIT_DECLINE
+Account:     ACCOUNT_NOT_FOUND (also for an account owned by someone else)
+Auth:        NOT_AUTHENTICATED
+
+Every one of these is a 422 except NOT_AUTHENTICATED (401). This list is the
+whole set a caller can see — keep it that way when adding code.
 
 Shared/infrastructure codes already emitted by the foundation (do not reuse
 these for business outcomes): CUSTOMER_NOT_FOUND (404 from `/login`), NOT_FOUND,
