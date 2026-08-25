@@ -70,6 +70,12 @@ wait_for "$CREDIT/credit-check" || exit 1
 wait_for "$UI/" || exit 1
 
 echo
+echo "--- health ---"
+# Readiness signal: must answer without a customer header and without touching
+# Postgres or either scoring service.
+check "health is open"        200 '"status":"UP"' "$MIDDLEWARE/health"
+
+echo
 echo "--- login ---"
 check "login succeeds"        200 'Alice Nguyen'      -X POST "$MIDDLEWARE/login" -H "$json" -d '{"customerId":1}'
 check "unknown customer 404"  404 'CUSTOMER_NOT_FOUND' -X POST "$MIDDLEWARE/login" -H "$json" -d '{"customerId":999}'

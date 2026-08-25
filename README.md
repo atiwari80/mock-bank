@@ -42,15 +42,23 @@ listen on their normal ports and address each other as `middleware:8080`,
 The UI talks to the middleware through `/api/*` on its own origin — nginx proxies
 that to `middleware:8080`, so there is no CORS setup to worry about.
 
-**Resetting the data.** Postgres runs without a persistent volume on purpose.
-`docker-compose down && docker-compose up -d` gives you a brand new database:
-Flyway re-runs every migration on middleware boot and you are back to the exact
-starting state, ids and all. It takes about fifteen seconds.
+### Resetting to a known state
 
-This matters more than it sounds. Balances move, `daily_withdrawn` accumulates,
-and payments advance through their states — so a run that isn't started from a
-clean database will not behave like the one before it. Anything driving this app
-repeatedly should reset between cycles rather than assume the seed is intact.
+```bash
+docker compose down && docker compose up -d --wait
+```
+
+That is the whole reset. Postgres runs without a persistent volume on purpose,
+so the database is destroyed and rebuilt: Flyway re-runs every migration on
+middleware boot and you are back at the exact starting state, ids and all.
+`--wait` makes the command return only once every service reports healthy, so
+whatever runs next does not have to poll or sleep. It takes about forty seconds.
+
+**Run this between cycles.** This app is stateful on purpose — balances move,
+`daily_withdrawn` accumulates, approvals resolve and scheduled payments advance.
+A second run against a database left over from the first will not behave like
+the first. That is deliberate: proving a suite needs a clean fixture is part of
+what this specimen is for.
 
 ### Checking it works
 
@@ -71,6 +79,16 @@ re-run.
 
 Note it is a wiring check, not the test suite — generating the real tests is the
 job of the pipeline this app is a specimen for.
+
+---
+
+### Health
+
+`GET /health` on the middleware returns `200 {"status":"UP"}`. It needs no
+customer header and touches neither Postgres nor the scoring services, so it
+answers the one question a caller waiting to start work actually has: is the API
+serving? Compose uses it as the middleware's healthcheck, which is what
+`up --wait` blocks on.
 
 ---
 

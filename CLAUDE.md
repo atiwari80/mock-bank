@@ -67,6 +67,7 @@ between cycles: `docker compose down && docker compose up -d`.
 
 ### Endpoint inventory
 ```
+GET  /health                             (no auth, no dependencies — readiness)
 POST /login                              GET  /whoami
 GET  /accounts/me                        GET  /accounts/me/transactions
 GET  /account/{id}                       GET  /transactions/{id}?from=&to=&page=&size=

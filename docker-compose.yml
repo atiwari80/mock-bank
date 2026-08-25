@@ -47,6 +47,15 @@ services:
       CREDIT_SERVICE_URL: ${CREDIT_SERVICE_URL:-http://credit-check-service:8082}
     ports:
       - "18080:8080"
+    # /health needs no auth and touches no dependency, so "healthy" here means
+    # the API is serving. start_period covers Spring's boot plus the Flyway
+    # migrations, which run before the port opens.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
