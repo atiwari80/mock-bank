@@ -76,6 +76,12 @@ echo "--- health ---"
 check "health is open"        200 '"status":"UP"' "$MIDDLEWARE/health"
 
 echo
+echo "--- openapi ---"
+check "api-docs served"       200 '"openapi"'          "$MIDDLEWARE/v3/api-docs"
+check "api-docs has routes"   200 '"/credit-card/apply"' "$MIDDLEWARE/v3/api-docs"
+check "api-docs has header"   200 'X-Customer-Id'      "$MIDDLEWARE/v3/api-docs"
+
+echo
 echo "--- login ---"
 check "login succeeds"        200 'Alice Nguyen'      -X POST "$MIDDLEWARE/login" -H "$json" -d '{"customerId":1}'
 check "unknown customer 404"  404 'CUSTOMER_NOT_FOUND' -X POST "$MIDDLEWARE/login" -H "$json" -d '{"customerId":999}'
