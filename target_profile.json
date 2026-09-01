@@ -1,0 +1,27 @@
+{
+  "name": "mock bank",
+
+  "repair": {
+    "strategy": "maven-java",
+    "root": ".",
+    "editable_roots": ["middleware/src/main/java"],
+    "serve_command": null,
+    "options": {}
+  },
+
+  "build": {
+    "strategy": "maven-java",
+    "root": "middleware",
+    "build_command": "mvn -q -B -DskipTests package",
+    "test_command": "mvn -q -B test",
+    "options": {}
+  },
+
+  "vcs": {
+    "strategy": "git-local",
+    "root": ".",
+    "default_branch": "main",
+    "branch_prefix": "testpilot/",
+    "options": {}
+  }
+}
