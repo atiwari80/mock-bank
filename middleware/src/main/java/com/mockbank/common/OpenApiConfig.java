@@ -23,8 +23,18 @@ import java.util.Set;
 @Configuration
 public class OpenApiConfig {
 
-    /** The only paths that work without a customer header. */
-    private static final Set<String> OPEN_PATHS = Set.of("/health", "/login");
+    /**
+     * The only paths that work without a customer header.
+     *
+     * PUBLIC because the routes manifest generator derives `required_headers`
+     * from exactly this rule. {@link CustomerContext} reads the header off the
+     * raw request rather than declaring it as a {@code @RequestHeader}, so no
+     * controller signature mentions it and it cannot be found by reflection --
+     * it has to come from the one place that states the rule. Two copies of
+     * "which paths are open" would drift, and the manifest would then declare a
+     * header the app does not want or omit one it enforces.
+     */
+    public static final Set<String> OPEN_PATHS = Set.of("/health", "/login");
 
     @Bean
     public OpenAPI mockBankOpenApi() {

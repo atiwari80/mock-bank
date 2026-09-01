@@ -1,0 +1,165 @@
+{
+  "routes" : [ {
+    "path" : "/account/{accountId}",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/account/StatementController.java",
+    "handler_symbol" : "getAccount",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/accounts/me",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/account/AccountController.java",
+    "handler_symbol" : "getMyAccount",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/accounts/me/transactions",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/account/AccountController.java",
+    "handler_symbol" : "getMyTransactions",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/approvals",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/transfer/ApprovalController.java",
+    "handler_symbol" : "list",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/approvals/{approvalId}/approve",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/transfer/ApprovalController.java",
+    "handler_symbol" : "approve",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/approvals/{approvalId}/reject",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/transfer/ApprovalController.java",
+    "handler_symbol" : "reject",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/credit-card/apply",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/creditcard/CreditCardController.java",
+    "handler_symbol" : "apply",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/health",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/common/HealthController.java",
+    "handler_symbol" : "health",
+    "kind" : "API",
+    "required_headers" : [ ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/login",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/auth/LoginController.java",
+    "handler_symbol" : "login",
+    "kind" : "API",
+    "required_headers" : [ ],
+    "body_fields" : [ "customerId" ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/recipients",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/transfer/TransferController.java",
+    "handler_symbol" : "myRecipients",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/schedule-payment",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/billpay/BillPayController.java",
+    "handler_symbol" : "schedule",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ "amount", "date", "payee" ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/scheduled-payments",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/billpay/BillPayController.java",
+    "handler_symbol" : "list",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/scheduled-payments/run",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/billpay/BillPayController.java",
+    "handler_symbol" : "run",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/scheduled-payments/{paymentId}/cancel",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/billpay/BillPayController.java",
+    "handler_symbol" : "cancel",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/transactions/{accountId}",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/account/StatementController.java",
+    "handler_symbol" : "getStatement",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/transfer",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/transfer/TransferController.java",
+    "handler_symbol" : "transfer",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ "amount", "fromAccount", "toRecipient" ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/whoami",
+    "method" : "GET",
+    "handler_file" : "middleware/src/main/java/com/mockbank/auth/SessionController.java",
+    "handler_symbol" : "whoAmI",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ ],
+    "route_prefix" : ""
+  }, {
+    "path" : "/withdraw",
+    "method" : "POST",
+    "handler_file" : "middleware/src/main/java/com/mockbank/withdraw/WithdrawController.java",
+    "handler_symbol" : "withdraw",
+    "kind" : "API",
+    "required_headers" : [ "X-Customer-Id" ],
+    "body_fields" : [ "account", "amount" ],
+    "route_prefix" : ""
+  } ]
+}
