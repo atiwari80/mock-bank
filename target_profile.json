@@ -6,7 +6,7 @@
     "editable_roots": [
       "middleware/src/main/java"
     ],
-    "serve_command": "java -jar middleware/target/middleware-0.1.0.jar --server.port={port}",
+    "serve_command": "export DB_URL=jdbc:$(echo \"$APP_DB_URL\" | sed \"s#postgresql://[^@]*@#postgresql://#\") DB_USER=$(echo \"$APP_DB_URL\" | sed -e \"s#postgresql://##\" -e \"s#:.*##\") DB_PASSWORD=$(echo \"$APP_DB_URL\" | sed -e \"s#.*://[^:]*:##\" -e \"s#@.*##\") FLYWAY_LOCATIONS=filesystem:/workspace/db/migrations; exec java -jar target/middleware-0.1.0.jar --server.port={port}",
     "options": {}
   },
   "build": {
