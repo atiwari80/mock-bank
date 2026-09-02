@@ -1,22 +1,23 @@
 {
   "name": "mock bank",
-
   "repair": {
     "strategy": "maven-java",
     "root": ".",
-    "editable_roots": ["middleware/src/main/java"],
-    "serve_command": null,
+    "editable_roots": [
+      "middleware/src/main/java"
+    ],
+    "serve_command": "java -jar middleware/target/middleware-0.1.0.jar --server.port={port}",
     "options": {}
   },
-
   "build": {
     "strategy": "maven-java",
     "root": "middleware",
     "build_command": "mvn -q -B -DskipTests package",
     "test_command": "mvn -q -B test",
-    "options": {}
+    "options": {
+      "image": "maven:3.9-eclipse-temurin-17"
+    }
   },
-
   "vcs": {
     "strategy": "git-local",
     "root": ".",
