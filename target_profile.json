@@ -6,7 +6,7 @@
     "editable_roots": [
       "middleware/src/main/java"
     ],
-    "serve_command": "export DB_URL=jdbc:$(echo \"$APP_DB_URL\" | sed \"s#postgresql://[^@]*@#postgresql://#\") DB_USER=$(echo \"$APP_DB_URL\" | sed -e \"s#postgresql://##\" -e \"s#:.*##\") DB_PASSWORD=$(echo \"$APP_DB_URL\" | sed -e \"s#.*://[^:]*:##\" -e \"s#@.*##\") FLYWAY_LOCATIONS=filesystem:/workspace/db/migrations; exec java -jar target/middleware-0.1.0.jar --server.port={port}",
+    "serve_command": "DB_URL=jdbc:postgresql://postgres:5432/mockbank DB_USER=mockbank DB_PASSWORD=mockbank java -jar middleware/target/middleware-0.1.0.jar --server.port={port}",
     "options": {}
   },
   "build": {
@@ -15,7 +15,8 @@
     "build_command": "mvn -q -B -DskipTests package",
     "test_command": "mvn -q -B test",
     "options": {
-      "image": "maven:3.9-eclipse-temurin-17"
+      "image": "maven:3.9-eclipse-temurin-17",
+      "cache_path": "/root/.m2"
     }
   },
   "vcs": {
